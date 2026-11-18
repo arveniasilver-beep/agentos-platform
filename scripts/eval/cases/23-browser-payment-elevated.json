@@ -1,0 +1,9 @@
+{
+  "id": "browser-payment-account-elevated",
+  "category": "browser",
+  "kind": "browser",
+  "description": "Browser Operator: a payment/account-sensitive mutation (type+submit on a bank login) escalates to elevated approval; a non-sensitive mutation only requires normal approval.",
+  "env": { "BROWSER_OPERATOR_ENABLED": "true" },
+  "browser": { "scenario": "payment-elevated" },
+  "expect": {}
+}

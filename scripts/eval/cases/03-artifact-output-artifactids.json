@@ -1,0 +1,15 @@
+{
+  "id": "artifact-output-artifactids",
+  "category": "artifact",
+  "description": "ARTIFACT_PERSISTENCE_ENABLED: artifact rows persisted, sha256/size valid, final_output.artifactIds filled.",
+  "env": { "ARTIFACT_PERSISTENCE_ENABLED": "true" },
+  "toolset": "deliverable",
+  "approvals": { "autoDecision": "approve" },
+  "task": { "prompt": "Produce a quarterly report artifact." },
+  "script": [
+    { "text": "Generating the artifact.", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "generate_document", "input": { "title": "Quarterly", "sections": [{ "heading": "Overview", "paragraphs": ["Revenue up."] }] } }], "stopReason": "tool_use" },
+    { "text": "Done.", "stopReason": "end_turn" }
+  ],
+  "expect": { "status": "completed", "artifacts": { "minCount": 1, "artifactIdsFilled": true, "sha256Valid": true } }
+}

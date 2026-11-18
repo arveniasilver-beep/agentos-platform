@@ -1,0 +1,19 @@
+{
+  "id": "approval-denied-tool-not-run",
+  "category": "policy",
+  "description": "A workspace file write requires approval; when denied the tool does NOT execute.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "fs.write" },
+  "tools": [{ "name": "fs_write", "riskLevel": "low", "permissions": ["fs.write"] }],
+  "approvals": { "autoDecision": "deny" },
+  "task": { "prompt": "Write a notes file." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "fs_write", "input": { "path": "out/notes.md" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "policy": [{ "tool": "fs_write", "effect": "require_approval" }],
+    "toolRan": { "fs_write": false }
+  }
+}

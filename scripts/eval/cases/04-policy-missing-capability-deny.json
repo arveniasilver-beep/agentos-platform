@@ -1,0 +1,19 @@
+{
+  "id": "policy-missing-capability-deny",
+  "category": "policy",
+  "description": "POLICY on, restricted scopes: a tool needing net.request (not granted) is denied and never runs.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "fs.read" },
+  "tools": [{ "name": "net_tool", "riskLevel": "low", "permissions": ["net.request"] }],
+  "task": { "prompt": "Fetch some data." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "net_tool", "input": { "url": "https://example.com" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "toolRan": { "net_tool": false },
+    "policy": [{ "tool": "net_tool", "effect": "deny" }],
+    "auditActionsInclude": ["policy.decision", "tool.execution.denied"]
+  }
+}

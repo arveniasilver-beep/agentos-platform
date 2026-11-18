@@ -1,0 +1,16 @@
+{
+  "id": "resume-after-crash",
+  "category": "resume",
+  "kind": "resume",
+  "description": "Safe in-process crash simulation: run, capture a step-boundary snapshot, resume from it to completion with no seq collision.",
+  "tools": [{ "name": "quick", "riskLevel": "low", "permissions": [] }],
+  "task": { "prompt": "Do multi-step work.", "stepBudget": 12 },
+  "script": [
+    { "text": "1. step a\n2. step b", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "quick", "input": {} }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "quick", "input": {} }], "stopReason": "tool_use" },
+    { "text": "clean final", "stopReason": "end_turn" }
+  ],
+  "resume": { "scriptAfterResume": [{ "text": "resumed final answer", "stopReason": "end_turn" }] },
+  "expect": { "status": "completed" }
+}

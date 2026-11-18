@@ -1,0 +1,9 @@
+{
+  "id": "desktop-path-traversal-blocked",
+  "category": "desktop",
+  "kind": "desktop",
+  "description": "Desktop Runner: safeResolve confines local access to the approved root — ../ traversal and absolute-path escapes are rejected; in-root paths are allowed.",
+  "env": { "DESKTOP_RUNNER_ENABLED": "true" },
+  "desktop": { "scenario": "path-traversal" },
+  "expect": {}
+}

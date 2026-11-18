@@ -1,0 +1,9 @@
+{
+  "id": "memory-relevant-retrieved-used",
+  "category": "memory",
+  "kind": "memory",
+  "description": "Project Memory: a relevant project_rule is retrieved as the top hit for a related prompt and injected (DATA-framed) into the context the agent would use.",
+  "env": { "PROJECT_MEMORY_ENABLED": "true" },
+  "memory": { "scenario": "retrieved", "prompt": "How do I install dependencies for this project?" },
+  "expect": {}
+}

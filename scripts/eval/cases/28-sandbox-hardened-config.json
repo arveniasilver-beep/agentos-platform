@@ -1,0 +1,9 @@
+{
+  "id": "sandbox-hardened-config",
+  "category": "sandbox",
+  "kind": "sandbox",
+  "description": "Sandbox Hardening: with the flag on, the container HostConfig has a read-only root filesystem, writable tmpfs scratch for /work and /tmp (disk quota), all capabilities dropped, and default-deny networking.",
+  "env": { "SANDBOX_HARDENING_ENABLED": "true" },
+  "sandbox": { "scenario": "hardened-config" },
+  "expect": {}
+}

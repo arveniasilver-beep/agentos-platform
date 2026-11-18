@@ -1,0 +1,930 @@
+// AgentOS data layer — Phase 1 (identity, tenancy, security).
+// Later phases add tasks, tools, files, artifacts, automations, etc. via new migrations.
+// See docs/DATABASE.md for the full 38-table target.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------- enums
+
+enum RiskLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum MemberRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+enum SecretType {
+  llm_api_key
+  embeddings_config
+  chat_provider_config
+  peer_provider_config
+  model_route_config
+  image_config
+  speech_config
+  oauth_client_secret
+  connector_token
+  sidecar_token
+  webhook_secret
+  generic
+}
+
+enum TaskStatus {
+  pending
+  planning
+  awaiting_approval
+  running
+  paused
+  verifying
+  completed
+  failed
+  stopped
+}
+
+// ---------------------------------------------------------------------------- identity
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime?
+  displayName   String
+  avatarUrl     String?
+  passwordHash  String? // argon2id; null if SSO-only (later)
+  status        String    @default("active") // active|suspended|deleted
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  memberships     WorkspaceMember[]
+  ownedWorkspaces Workspace[]       @relation("workspaceOwner")
+  auditLogs       AuditLog[]        @relation("auditActor")
+  notifications   Notification[]
+  createdSecrets  Secret[]          @relation("secretCreator")
+  sessions        Session[]
+  devices         Device[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique // sha256 of the opaque session token (never store the token itself)
+  userAgent  String?
+  ip         String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Device Sync Foundation (TICKET-5). A long-lived Bearer credential tied to a user, so a registered
+// desktop/Android device can reach the same workspace-scoped APIs as the web session (consistent
+// cross-device sync). User-scoped like Session (no workspaceId); isolation is by userId + the auth/role
+// guards. Only the token HASH is stored. Revoked devices stop resolving immediately (fail-closed).
+model Device {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  platform   String    @default("desktop") // desktop | android | web | other
+  tokenHash  String    @unique // sha256 of the opaque device token (never stored in clear)
+  userAgent  String?
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime? // set on revoke/logout; resolveDevice ignores revoked rows
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  desktopRunners DesktopRunner[]
+
+  @@index([userId, revokedAt])
+  @@map("devices")
+}
+
+// Desktop Runner Foundation (TICKET-7). A registered local-execution agent on a desktop machine, tied to
+// a Device (TICKET-5) for identity/auth. Workspace-scoped (RLS). Device revoke is the PRIMARY kill-switch;
+// `status`/`revokedAt` here are supporting metadata. Capabilities/version are reported on register; a
+// heartbeat keeps it live. No host paths/secrets are stored on this row — only structural runner state.
+model DesktopRunner {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  deviceId        String // -> Device (TICKET-5); identity + the revoke kill-switch live there
+  version         String?
+  capabilities    Json? // e.g. { localFs: true, shellExec: false } (shellExec stays false until Phase-5)
+  status          String    @default("active") // active | idle | disabled | revoked
+  lastHeartbeatAt DateTime  @default(now())
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, deviceId])
+  @@index([workspaceId, status])
+  @@map("desktop_runners")
+}
+
+// Workflow Builder (TICKET-8). A multi-step workflow definition (validated JSON DSL) plus its runs.
+// Workspace-scoped (RLS). Builds ON TOP of single-step Automation: a workflow sequences task/condition/
+// approval steps with branching + per-step retry. Inert unless WORKFLOW_BUILDER_ENABLED.
+model Workflow {
+  id                String   @id @default(uuid())
+  workspaceId       String
+  projectId         String?
+  createdByUserId   String
+  name              String
+  definition        Json // validated DSL: { start, trigger, steps[] }
+  enabled           Boolean  @default(true)
+  version           Int      @default(1)
+  webhookSecretHash String? // sha256 of the per-workflow webhook token (trigger=webhook); never the token
+  cronExpression    String? // mirror of a schedule trigger, for the BullMQ scheduler
+  timezone          String   @default("UTC")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      WorkflowRun[]
+
+  @@index([workspaceId])
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id            String    @id @default(uuid())
+  workflowId    String
+  workspaceId   String
+  status        String    @default("pending") // pending|running|awaiting_approval|completed|failed|skipped
+  triggeredBy   String // manual|scheduled|webhook
+  currentStepId String?
+  stepStates    Json      @default("[]") // [{ stepId, status, taskId?, startedAt, finishedAt, error? }]
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  failureReason String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workflowId, createdAt])
+  @@map("workflow_runs")
+}
+
+// ---------------------------------------------------------------------------- tenancy
+
+model Workspace {
+  id                String    @id @default(uuid())
+  name              String
+  slug              String    @unique
+  ownerUserId       String
+  planTier          String    @default("free") // free|team|enterprise
+  budgetCapUsd      Decimal?  @db.Decimal(14, 6)
+  costThresholdUsd  Decimal?  @db.Decimal(14, 6)
+  defaultRiskPolicy Json?
+  settings          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  owner        User              @relation("workspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members      WorkspaceMember[]
+  projects     Project[]
+  secrets      Secret[]
+  apiKeys      ApiKey[]
+  auditLogs    AuditLog[]
+  tasks        Task[]
+  automations  Automation[]
+  skills       Skill[]
+  usageRecords UsageRecord[]
+  costRecords  CostRecord[]
+  personalization Personalization?
+  connections  Connection[]
+  inboundAddress InboundAddress?
+  playbooks    Playbook[]
+  localFolders LocalFolder[]
+  projectMemory ProjectMemory[]
+  browserSessions BrowserSession[]
+  browserActions  BrowserAction[]
+  desktopRunners  DesktopRunner[]
+  workflows       Workflow[]
+  connectorEvents ConnectorEvent[]
+
+  @@index([ownerUserId])
+  @@map("workspaces")
+}
+
+/// Mail-to-task inbound address: an email service (Postmark/SendGrid/Mailgun/...) is configured to
+/// POST parsed inbound mail to /inbound-email/<token>; a matching, enabled row creates a task from
+/// the email. The opaque token IS the capability (looked up across workspaces in system context).
+model InboundAddress {
+  id              String   @id @default(uuid())
+  workspaceId     String   @unique
+  token           String   @unique
+  enabled         Boolean  @default(true)
+  /// Risk ceiling for email-created tasks. Default 'low' — untrusted email must NOT auto-run risky
+  /// tools; anything above this parks for human approval. An admin may raise it knowingly.
+  taskRiskCeiling String   @default("low")
+  /// Per-task cost ceiling (USD) for email-created tasks — bounds runaway/abusive spend.
+  taskCostBudgetUsd Decimal? @db.Decimal(14, 6)
+  /// string[] of allowed sender addresses; empty = accept any sender (use with care). NOTE: the From
+  /// header is caller-supplied/spoofable — a convenience filter, not a security boundary; the token is.
+  allowedSenders  Json     @default("[]")
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("inbound_addresses")
+}
+
+/// A connected third-party account (OAuth), e.g. GitHub. One row per (workspace, provider). The
+/// access token itself lives encrypted in the secrets vault (SecretType connector_token) keyed by
+/// provider; this row tracks the connected account + scopes for display and tool gating.
+model Connection {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  provider        String // "github" (extensible: gmail, gdrive, notion, ...)
+  externalId      String // provider's account id
+  accountLabel    String // human label (e.g. GitHub login)
+  scopes          String // space-separated granted scopes
+  createdByUserId String
+  // Connectors v2 (TICKET-9): sha256 of the per-connection inbound webhook secret (only when a webhook
+  // is configured). Never the token itself. Additive/nullable.
+  webhookSecretHash String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    ConnectorEvent[]
+
+  @@unique([workspaceId, provider])
+  @@map("connections")
+}
+
+// Connectors v2 (TICKET-9). A durable, workspace-isolated record of an inbound connector webhook event.
+// The payload is stored MINIMAL + redacted (event type + a short summary) — never raw secrets/bodies.
+model ConnectorEvent {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  connectionId String
+  provider     String
+  eventType    String // provider event name (e.g. github:push)
+  summary      String? // short, redacted human summary — never the raw payload/secret
+  createdAt    DateTime @default(now())
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([connectionId, createdAt])
+  @@map("connector_events")
+}
+
+/// Always-on agent personalization (Manus-style "Kişiselleştirme"): a workspace's profile, custom
+/// instructions, and remembered facts that are prepended to EVERY task's system prompt so the agent
+/// is steered consistently across all runs. One row per workspace.
+model Personalization {
+  id           String   @id @default(uuid())
+  workspaceId  String   @unique
+  nickname     String?
+  profession   String?
+  about        String?
+  instructions String?
+  /// string[] of short facts the agent should remember about the user/workspace.
+  memories     Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("personalizations")
+}
+
+model WorkspaceMember {
+  id          String     @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        MemberRole @default(member)
+  invitedBy   String?
+  joinedAt    DateTime?
+  createdAt   DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+// ---------------------------------------------------------------------------- grouping
+
+model Project {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  name              String
+  description       String?
+  budgetCapUsd      Decimal?  @db.Decimal(14, 6)
+  permissionProfile Json?
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+/// Reusable task template (Manus "Playbook"): a saved prompt + optional capability/effort the user
+/// can re-run on demand to spawn a new task. Workspace-scoped (RLS).
+model Playbook {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  name            String
+  prompt          String
+  capability      String?
+  effort          String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("playbooks")
+}
+
+/// "My Computer": a host folder the user approved the agent to operate on (read; write only when
+/// writable=true, and any write is approval-gated). Workspace-scoped (RLS). Only honored when the
+/// server runs with ENABLE_LOCAL_FS (a local/desktop deployment).
+model LocalFolder {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  label           String
+  path            String
+  writable        Boolean  @default(false)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("local_folders")
+}
+
+// ---------------------------------------------------------------------------- security
+
+model Secret {
+  id              String     @id @default(uuid())
+  workspaceId     String
+  type            SecretType
+  label           String
+  ciphertext      Bytes // AES-256-GCM payload
+  iv              Bytes // GCM nonce
+  authTag         Bytes // GCM auth tag
+  wrappedDataKey  Bytes // per-row data key, master-key-wrapped (envelope)
+  kmsKeyId        String // master key id / version (rotation)
+  lastFour        String? // masked display only
+  createdByUserId String
+  rotatedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("secretCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  apiKeys   ApiKey[]
+
+  @@index([workspaceId, type])
+  @@map("secrets")
+}
+
+model ApiKey {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  purpose         String // llm_provider | public_api
+  provider        String? // anthropic (default)
+  secretId        String? // -> secrets (actual key material)
+  publicId        String?   @unique // visible key id for public API (later)
+  hashedKey       String? // hash of public secret (never plaintext)
+  scopes          Json?
+  rateLimitTier   String?   @default("standard")
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  secret    Secret?   @relation(fields: [secretId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, purpose])
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------- audit
+
+model AuditLog {
+  id          String     @id @default(uuid())
+  workspaceId String
+  actorUserId String? // null = system/agent
+  actorType   String     @default("user") // user|agent|system|api_key
+  action      String // verb.noun, e.g. task.stop, secret.create
+  targetType  String?
+  targetId    String?
+  risk        RiskLevel?
+  metadata    Json? // masked
+  prevHash    String? // hash chain (tamper-evidence)
+  hash        String?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("auditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  kind        String // approval_request|task_done|agent_question|system|billing
+  title       String
+  body        String?
+  taskId      String?
+  approvalId  String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// pgvector-backed RAG store. The `embedding` column + HNSW index are created via raw SQL in the
+// migration (Prisma sees it as Unsupported). KNN queries always filter by workspaceId (tenancy).
+model VectorDocument {
+  id          String                       @id @default(uuid())
+  workspaceId String
+  ownerType   String // memory|knowledge|file|skill
+  ownerId     String?
+  content     String
+  embedding   Unsupported("vector(1536)")?
+  metadata    Json?
+  createdAt   DateTime                     @default(now())
+
+  @@index([workspaceId, ownerType])
+  @@map("vector_documents")
+}
+
+// ---------------------------------------------------------------------------- agent core (Phase 2)
+
+model Task {
+  id              String     @id @default(uuid())
+  workspaceId     String
+  projectId       String?
+  createdByUserId String
+  // Wide Research: a sub-task spawned by a parent agent. Null for top-level tasks. Cascade-deletes
+  // with the parent so a deleted research run takes its sub-agents with it.
+  parentTaskId    String?
+  title           String
+  prompt          String
+  // Capability mode (Manus-style): primes the agent for a specific deliverable type
+  // (slides/website/document/spreadsheet/chart/image/chat). Null = general autonomous agent.
+  capability      String?
+  status          TaskStatus @default(pending)
+  riskCeiling     RiskLevel  @default(high)
+  stepBudget      Int        @default(12)
+  costBudgetUsd   Decimal?   @db.Decimal(14, 6)
+  // Reasoning effort tier (low|medium|high|max) — maps to the model's effort param. Null = high.
+  effort          String?
+  estCostUsd      Decimal?   @db.Decimal(14, 6)
+  result          Json?
+  errorText       String?
+  killRequested   Boolean    @default(false)
+  // Durable resume (TICKET-002/003/004) — all additive + nullable; inert unless RESUME_ENABLED.
+  // Worker lease: who is running this task and until when (heartbeat extends it).
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
+  // Monotonic fencing token, incremented on every (re)claim; a superseded worker holds a stale token.
+  fencingToken    Int        @default(0)
+  // How many times this task has been resumed; bounds resume loops on a poison task.
+  resumeCount     Int        @default(0)
+  // Task management (Manus-style): favorite/pin and archive (hide from the default list).
+  favorite        Boolean    @default(false)
+  archivedAt      DateTime?
+  // User's 1-5 star rating of the result (Manus-style feedback). Null = unrated.
+  rating          Int?
+  // Public read-only share: when set, anyone with this opaque token can replay the run (no auth).
+  // Null = not shared. Revoking clears it.
+  shareId         String?    @unique
+  // Durable AutomationRun (TICKET-AUTOMATION): the AutomationRun that launched this task (additive,
+  // nullable; only set when AUTOMATION_RUNS_ENABLED). Links a task back to its automation fire for
+  // run-history + cost attribution. Plain nullable column (no enforced FK) to avoid a 2-way relation.
+  automationRunId String?
+  // Workflow Builder (TICKET-8): links a task back to its workflow run step (nullable; only set when
+  // WORKFLOW_BUILDER_ENABLED). Plain nullable column, mirroring automationRunId.
+  workflowRunId   String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Task?         @relation("TaskChildren", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  children  Task[]        @relation("TaskChildren")
+  logs      TaskLog[]
+  toolCalls ToolCall[]
+  approvals Approval[]
+  usage     UsageRecord[]
+  costs     CostRecord[]
+  snapshot  TaskSnapshot?
+  artifacts Artifact[]
+  messages  TaskMessage[]
+
+  @@index([workspaceId, status])
+  @@index([parentTaskId])
+  @@index([createdAt])
+  // Backs the default/archived task list: filter (workspaceId, archivedAt) + sort (favorite, createdAt).
+  @@index([workspaceId, archivedAt, favorite, createdAt])
+  @@index([automationRunId])
+  @@index([workflowRunId])
+  @@map("tasks")
+}
+
+model TaskLog {
+  id          String   @id @default(uuid())
+  taskId      String
+  workspaceId String
+  seq         Int
+  type        String
+  payload     Json
+  createdAt   DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, seq])
+  @@index([taskId, createdAt])
+  @@map("task_logs")
+}
+
+// Durable resume (TICKET-003): the latest serialized engine state for a task, written at step
+// boundaries so a resume reads it in O(1) instead of replaying the whole TaskLog. One latest row
+// per task (taskId @unique, upsert). `state` holds the ResumableState (incl. conversation
+// messages[]) so it is workspace-scoped + RLS-protected exactly like TaskLog. Cascade-deletes
+// with the task. `seq` records the event seq this snapshot was taken at.
+model TaskSnapshot {
+  id          String   @id @default(uuid())
+  taskId      String   @unique
+  workspaceId String
+  seq         Int
+  state       Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("task_snapshots")
+}
+
+// Multi-turn follow-up (KEYSTONE). A durable conversation turn on a task: the user's follow-up prompts and
+// the assistant's answers, so a finished task reads as a chat thread the user can continue. Distinct from
+// TaskLog (engine events) and TaskSnapshot (transient resume state). Workspace-scoped + RLS-protected.
+model TaskMessage {
+  id          String   @id @default(uuid())
+  taskId      String
+  workspaceId String
+  role        String // 'user' | 'assistant'
+  seq         Int // gap-free per task (ordering)
+  content     String
+  createdAt   DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, seq])
+  @@index([taskId, createdAt])
+  @@map("task_messages")
+}
+
+// Durable Artifact Persistence (TICKET-ART). A first-class, durable, versioned record of a file the
+// agent produced (deliverable / download / upload). The bytes live in object/blob storage (durable,
+// survives sandbox teardown); this row is the queryable identity. RLS-scoped per workspace. Cascade-
+// deletes with the task. `name` is the sandbox-relative path (logical identity within the task).
+model Artifact {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  taskId           String
+  projectId        String?
+  name             String
+  kind             String
+  // App-maintained pointer to the latest ArtifactVersion.id (NOT a FK — avoids a cyclic constraint).
+  currentVersionId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  task     Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  versions ArtifactVersion[]
+
+  @@unique([taskId, name])
+  @@index([workspaceId])
+  @@index([taskId])
+  @@map("artifacts")
+}
+
+// One immutable content version of an Artifact. `blobKey` is a SERVER-DERIVED storage key
+// (workspaceId/taskId/artifactId/version) — never built from user input. Dedup by sha256.
+model ArtifactVersion {
+  id          String   @id @default(uuid())
+  artifactId  String
+  workspaceId String
+  version     Int
+  blobKey     String
+  sha256      String
+  sizeBytes   BigInt
+  mimeType    String
+  createdAt   DateTime @default(now())
+
+  artifact Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+
+  @@unique([artifactId, version])
+  @@index([workspaceId])
+  @@index([artifactId])
+  @@map("artifact_versions")
+}
+
+model ToolCall {
+  id          String    @id @default(uuid())
+  taskId      String
+  workspaceId String
+  callId      String
+  toolName    String
+  toolVersion String? // TICKET-2: tool implementation version recorded at call time (nullable; additive)
+  risk        RiskLevel
+  args        Json
+  output      Json?
+  ok          Boolean?
+  errorText   String?
+  createdAt   DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, callId])
+  @@index([workspaceId, toolName])
+  @@map("tool_calls")
+}
+
+model Approval {
+  id              String    @id @default(uuid())
+  taskId          String
+  workspaceId     String
+  approvalId      String
+  action          String
+  risk            RiskLevel
+  status          String    @default("pending") // pending|approved|denied
+  decidedByUserId String?
+  requestedAt     DateTime  @default(now())
+  decidedAt       DateTime?
+  // Policy engine (TICKET-POLICY) — additive. `elevated` = the policy required an elevated approval
+  // (admin/owner + non-self, or owner break-glass). `policyReason` = why the policy gated this call.
+  elevated        Boolean   @default(false)
+  policyReason    String?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, approvalId])
+  @@index([workspaceId, status])
+  @@map("approvals")
+}
+
+model UsageRecord {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  taskId           String?
+  provider         String   @default("anthropic")
+  model            String   @default("claude-opus-4-8")
+  inputTokens      BigInt   @default(0)
+  outputTokens     BigInt   @default(0)
+  cacheReadTokens  BigInt   @default(0)
+  cacheWriteTokens BigInt   @default(0)
+  createdAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("usage_records")
+}
+
+model CostRecord {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskId      String?
+  amountUsd   Decimal  @db.Decimal(14, 6)
+  tokenCount  BigInt   @default(0)
+  computedAt  DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("cost_records")
+}
+
+// ---------------------------------------------------------------------------- automations (Phase 3)
+
+// A recurring, self-running agent task: on its cron schedule a fresh Task is created and run.
+model Automation {
+  id              String     @id @default(uuid())
+  workspaceId     String
+  projectId       String?
+  createdByUserId String
+  name            String
+  prompt          String
+  cronExpression  String // 5-field cron, evaluated in the configured timezone
+  timezone        String     @default("UTC")
+  enabled         Boolean    @default(true)
+  riskCeiling     RiskLevel  @default(high)
+  stepBudget      Int        @default(12)
+  costBudgetUsd   Decimal?   @db.Decimal(14, 6)
+  lastRunAt       DateTime?
+  lastTaskId      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      AutomationRun[]
+
+  @@index([workspaceId, enabled])
+  @@map("automations")
+}
+
+// Durable AutomationRun history (TICKET-AUTOMATION). One row per logical fire ATTEMPT. Written only
+// when AUTOMATION_RUNS_ENABLED=true (additive; inert when off). Idempotency + retry-safety come from
+// the unique [automationId, scheduledFireKey, attempt]: a duplicate delivery of the same scheduled
+// tick collides (skipped), while a retry uses a higher attempt so it never collides.
+model AutomationRun {
+  id               String    @id @default(uuid())
+  automationId     String
+  workspaceId      String
+  taskId           String? // the Task this run launched (null until created; null for skipped)
+  status           String    @default("pending") // pending|running|awaiting_approval|completed|failed|skipped
+  triggeredBy      String // manual|scheduled
+  scheduledFireKey String // stable per logical fire (scheduled-time bucket / once / manual uuid)
+  attempt          Int       @default(0) // 0 = original, N = Nth run-level retry
+  retryOfRunId     String? // the run this is a retry of (chain visibility)
+  skipReason       String?
+  failureReason    String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, scheduledFireKey, attempt])
+  @@index([automationId, createdAt])
+  @@index([workspaceId, status])
+  @@map("automation_runs")
+}
+
+// Project Memory / Context System (TICKET-MEMORY). Workspace/project-scoped durable memory the agent
+// recalls at task start. Content is stored ALREADY-REDACTED (secrets never persisted in clear). Written
+// only when relevant; injected (bounded + re-redacted + fenced as DATA) into the system prompt when
+// PROJECT_MEMORY_ENABLED. Retrieval is deterministic (keyword/tag/recency); a semantic scorer can be
+// added later without schema changes.
+model ProjectMemory {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  projectId        String? // null = workspace-wide
+  // decision | completed_ticket | risk | deferred_item | user_preference | project_rule |
+  // important_file | known_bug | lesson_learned | architecture_note
+  kind             String
+  content          String // stored REDACTED
+  tags             String[]  @default([])
+  // userProvided | systemGenerated | task | artifact | commit
+  source           String
+  sourceTaskId     String?
+  sourceArtifactId String?
+  sourceCommitHash String?
+  confidence       Float     @default(0.5) // 0..1
+  priority         Int       @default(0)
+  expiresAt        DateTime? // past => excluded from retrieval
+  archivedAt       DateTime? // soft-delete => excluded from retrieval
+  supersededById   String? // correction chain (this entry replaced by another)
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, kind])
+  @@index([workspaceId, projectId, archivedAt])
+  @@index([workspaceId, archivedAt, priority])
+  @@map("project_memory")
+}
+
+// Browser Operator Hardening (TICKET-1). Durable, workspace-isolated record of an agent browser session
+// and its actions — for audit, trace, approval visibility, and human-takeover state. Populated only when
+// BROWSER_OPERATOR_ENABLED. URLs are stored sanitized (no query secrets); cookies/tokens are NEVER stored.
+model BrowserSession {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  taskId        String? // the task that drives this session (in-memory session is per-task)
+  status        String    @default("idle") // idle | acting | awaiting_approval | takeover | closed | error
+  lastUrl       String? // sanitized (host + path, query redacted)
+  lastAction    String?
+  actionCount   Int       @default(0)
+  approvalCount Int       @default(0)
+  deniedCount   Int       @default(0)
+  takeover      Boolean   @default(false)
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actions   BrowserAction[]
+
+  @@index([workspaceId, status])
+  @@index([taskId])
+  @@map("browser_sessions")
+}
+
+// One durable browser action (navigate/click/type/read/screenshot/upload/download) with its redacted
+// target, risk, approval outcome, and optional screenshot artifact link — the replayable browser trace.
+model BrowserAction {
+  id           String   @id @default(uuid())
+  sessionId    String
+  workspaceId  String
+  taskId       String?
+  callId       String? // links to the engine tool callId (correlates start/result)
+  action       String // navigate | click | type | read | screenshot | upload | download | input
+  url          String? // sanitized
+  target       String? // selector/text summary, redacted + truncated
+  risk         String   @default("low") // low | medium | high | critical
+  outcome      String   @default("pending") // pending | ok | denied | error | awaiting_approval
+  approvalId   String?
+  screenshotArtifactId String?
+  detail       String? // redacted, bounded summary
+  createdAt    DateTime @default(now())
+
+  session   BrowserSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([callId])
+  @@map("browser_actions")
+}
+
+// A reusable, named task template. Running it substitutes {{input}} into `instructions` (or appends
+// the input) and dispatches a fresh task through the normal pipeline.
+model Skill {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  createdByUserId String
+  name            String
+  description     String?
+  instructions    String // prompt template; may contain {{input}} or v2 {{paramName}} placeholders
+  riskCeiling     RiskLevel @default(high)
+  stepBudget      Int       @default(12)
+  costBudgetUsd   Decimal?  @db.Decimal(14, 6)
+  // Skills v2 (TICKET-4) — all additive/nullable so legacy skills are unaffected.
+  version         Int       @default(1) // bumped on each v2 update; recorded in the run trace
+  params          Json? // typed input params: [{ name, type: string|number|boolean, required, description? }]
+  capability      String? // task capability mode applied at run (slides|document|website|chart|image|spreadsheet|chat)
+  effort          String? // reasoning effort applied at run (low|medium|high|max)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("skills")
+}

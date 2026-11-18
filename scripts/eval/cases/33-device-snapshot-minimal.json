@@ -1,0 +1,9 @@
+{
+  "id": "device-sync-snapshot-minimal",
+  "category": "device",
+  "kind": "device",
+  "description": "Device Sync: the consolidated snapshot surfaces task status for cross-device consistency while never leaking the task prompt body (mobile-safe minimal payload).",
+  "env": { "DEVICE_SYNC_ENABLED": "true" },
+  "device": { "scenario": "snapshot-minimal" },
+  "expect": {}
+}

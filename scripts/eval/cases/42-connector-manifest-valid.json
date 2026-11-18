@@ -1,0 +1,9 @@
+{
+  "id": "connector-manifest-validation",
+  "category": "connector",
+  "kind": "connector",
+  "description": "Connectors v2: the built-in manifests validate; a malformed provider name or duplicate action id is rejected (an invalid manifest never registers).",
+  "env": { "CONNECTORS_V2_ENABLED": "true" },
+  "connector": { "scenario": "manifest-valid" },
+  "expect": {}
+}

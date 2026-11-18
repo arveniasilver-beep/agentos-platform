@@ -1,0 +1,19 @@
+{
+  "id": "coding-safe-edit-test-pass",
+  "category": "tool-use",
+  "description": "Coding workspace: a normal code edit is allowed and the project tests run (stub runner, exit 0).",
+  "env": { "CODING_WORKSPACE_ENABLED": "true", "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "fs.write,shell.exec,fs.read" },
+  "toolset": "coding",
+  "task": { "prompt": "Add a constant and run the tests." },
+  "script": [
+    { "text": "I'll add the constant.", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "write_file", "input": { "path": "src/value.ts", "content": "export const value = 42;\n" } }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "run_tests", "input": {} }], "stopReason": "tool_use" },
+    { "text": "Edit applied and tests pass.", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "toolRan": { "write_file": true, "run_tests": true },
+    "policy": [{ "tool": "write_file", "effect": "allow" }, { "tool": "run_tests", "effect": "allow" }]
+  }
+}

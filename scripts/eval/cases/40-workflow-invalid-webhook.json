@@ -1,0 +1,9 @@
+{
+  "id": "workflow-invalid-rejected-and-webhook-secured",
+  "category": "workflow",
+  "kind": "workflow",
+  "description": "Workflow Builder: an invalid definition is rejected (does not run); a webhook-trigger workflow issues a prefixed secret and rejects a wrong token (constant-time).",
+  "env": { "WORKFLOW_BUILDER_ENABLED": "true" },
+  "workflow": { "scenario": "invalid-webhook" },
+  "expect": {}
+}

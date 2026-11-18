@@ -1,0 +1,10 @@
+{
+  "id": "automation-overlap-prevention",
+  "category": "automation",
+  "kind": "automation",
+  "description": "Durable AutomationRun: while a run is active a second scheduled fire is skipped (overlap), a duplicate of the same fire key is deduped (DB unique), and exactly one run stays active.",
+  "env": { "AUTOMATION_RUNS_ENABLED": "true" },
+  "automation": { "scenario": "overlap" },
+  "task": { "prompt": "noop" },
+  "expect": {}
+}

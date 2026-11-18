@@ -1,0 +1,9 @@
+{
+  "id": "browser-cross-workspace-isolation",
+  "category": "browser",
+  "kind": "browser",
+  "description": "Browser Operator: a durable browser session created in workspace A is invisible to workspace B (workspace-scoped queries + RLS).",
+  "env": { "BROWSER_OPERATOR_ENABLED": "true" },
+  "browser": { "scenario": "cross-workspace" },
+  "expect": {}
+}

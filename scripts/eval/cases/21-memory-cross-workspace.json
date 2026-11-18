@@ -1,0 +1,9 @@
+{
+  "id": "memory-cross-workspace-isolation",
+  "category": "memory",
+  "kind": "memory",
+  "description": "Project Memory isolation: memory created in workspace A is invisible to workspace B retrieval + list (workspace-scoped queries).",
+  "env": { "PROJECT_MEMORY_ENABLED": "true" },
+  "memory": { "scenario": "cross-workspace" },
+  "expect": {}
+}

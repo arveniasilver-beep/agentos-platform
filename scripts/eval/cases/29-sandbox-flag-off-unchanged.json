@@ -1,0 +1,9 @@
+{
+  "id": "sandbox-flag-off-unchanged",
+  "category": "sandbox",
+  "kind": "sandbox",
+  "description": "Sandbox Hardening flag-off: no read-only root / no tmpfs (byte-identical legacy behavior), while the always-on hardening (caps dropped, default-deny network) remains intact.",
+  "env": {},
+  "sandbox": { "scenario": "flag-off-unchanged" },
+  "expect": {}
+}

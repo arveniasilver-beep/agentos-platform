@@ -1,0 +1,9 @@
+{
+  "id": "model-router-effort-selection",
+  "category": "model-router",
+  "kind": "model-router",
+  "description": "Model Router: a high-effort request routes to the reasoning profile, a low-effort request to the cheap default; an invalid route table (unknown profile reference) is rejected.",
+  "env": { "MODEL_ROUTER_ENABLED": "true" },
+  "modelRouter": { "scenario": "effort-routing" },
+  "expect": {}
+}

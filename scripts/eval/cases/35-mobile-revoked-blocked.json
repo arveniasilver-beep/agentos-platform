@@ -1,0 +1,9 @@
+{
+  "id": "mobile-revoked-device-blocked",
+  "category": "device",
+  "kind": "device",
+  "description": "Mobile Control Panel: a revoked device token fails closed (resolveDevice returns null), so the mobile route/API access is denied for a revoked device.",
+  "env": { "DEVICE_SYNC_ENABLED": "true" },
+  "device": { "scenario": "revoked-blocked" },
+  "expect": {}
+}

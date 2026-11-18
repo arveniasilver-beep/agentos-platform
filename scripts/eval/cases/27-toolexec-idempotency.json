@@ -1,0 +1,9 @@
+{
+  "id": "toolexec-idempotency-no-duplicate-side-effect",
+  "category": "tool-exec",
+  "kind": "tool-exec",
+  "description": "Tool Execution Hardening: with the flag on, a repeated identical call to an idempotent tool is served from cache (the underlying run executes once), preventing duplicate side-effects.",
+  "env": { "TOOL_EXEC_HARDENING_ENABLED": "true" },
+  "toolExec": { "scenario": "idempotency" },
+  "expect": {}
+}

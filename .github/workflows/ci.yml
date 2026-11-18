@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      DATABASE_URL: postgresql://agentos:agentos@localhost:5432/agentos?schema=public
+      REDIS_URL: redis://localhost:6379
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agentos
+          POSTGRES_PASSWORD: agentos
+          POSTGRES_DB: agentos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentos -d agentos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter @agentos/db exec prisma migrate deploy
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Install Playwright Chromium (for browser-tool tests)
+        run: pnpm --filter @agentos/tools exec playwright install --with-deps chromium
+
+      - name: Test (unit + integration vs Postgres/Redis/Chromium)
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Scan client bundles for secrets
+        run: pnpm scan:secrets
+
+      - name: E2E (api on live Postgres + Redis queue)
+        env:
+          LLM_MODE: mock
+          EXECUTION_MODE: queue
+        run: |
+          node services/api/dist/main.js &
+          SERVER_PID=$!
+          curl -s --retry 30 --retry-delay 1 --retry-connrefused http://localhost:4000/health
+          API_BASE=http://localhost:4000 node services/api/test/auth.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/workspaces.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/secrets.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/tasks.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/tasks-stream.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/automations.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/artifacts.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/skills.e2e.mjs
+          API_BASE=http://localhost:4000 node services/api/test/public-api.e2e.mjs
+          kill $SERVER_PID

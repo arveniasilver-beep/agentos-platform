@@ -1,0 +1,9 @@
+{
+  "id": "model-router-provider-fallback",
+  "category": "model-router",
+  "kind": "model-router",
+  "description": "Model Router: when the selected provider fails, the request falls back through the chain to the next profile; if every provider in the chain fails, the call throws.",
+  "env": { "MODEL_ROUTER_ENABLED": "true" },
+  "modelRouter": { "scenario": "fallback" },
+  "expect": {}
+}

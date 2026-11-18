@@ -1,0 +1,9 @@
+{
+  "id": "desktop-runner-register-heartbeat-revoked",
+  "category": "desktop",
+  "kind": "desktop",
+  "description": "Desktop Runner: a live device registers + heartbeats an active runner; once the device is revoked, registration fails closed.",
+  "env": { "DESKTOP_RUNNER_ENABLED": "true" },
+  "desktop": { "scenario": "register-revoked" },
+  "expect": {}
+}

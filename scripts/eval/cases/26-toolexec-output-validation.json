@@ -1,0 +1,9 @@
+{
+  "id": "toolexec-output-schema-validation",
+  "category": "tool-exec",
+  "kind": "tool-exec",
+  "description": "Tool Execution Hardening: with the flag on, a tool returning output that violates its declared schema becomes a controlled tool_error; with the flag off, the output passes through unchanged (byte-identical legacy behavior).",
+  "env": { "TOOL_EXEC_HARDENING_ENABLED": "true" },
+  "toolExec": { "scenario": "output-validation" },
+  "expect": {}
+}

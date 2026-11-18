@@ -1,0 +1,9 @@
+{
+  "id": "browser-readonly-allowed",
+  "category": "browser",
+  "kind": "browser",
+  "description": "Browser Operator: read-only actions (read/screenshot) auto-allow; write actions (click) require approval.",
+  "env": { "BROWSER_OPERATOR_ENABLED": "true" },
+  "browser": { "scenario": "readonly-allowed" },
+  "expect": {}
+}

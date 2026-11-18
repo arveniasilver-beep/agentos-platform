@@ -1,0 +1,11 @@
+{
+  "id": "automation-one-time-success",
+  "category": "automation",
+  "kind": "automation",
+  "description": "Durable AutomationRun: a one-time fire creates a run, launches a task that completes, and the run is marked completed + linked to the task.",
+  "env": { "AUTOMATION_RUNS_ENABLED": "true" },
+  "automation": { "scenario": "success" },
+  "task": { "prompt": "Summarize today's activity." },
+  "script": [{ "text": "Summary complete.", "stopReason": "end_turn" }],
+  "expect": {}
+}

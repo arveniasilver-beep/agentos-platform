@@ -1,0 +1,19 @@
+{
+  "id": "regression-from-failed-task",
+  "category": "meta",
+  "kind": "gencase",
+  "description": "gen-case: build a regression DRAFT from a failed task's log — schema-valid, needsReview set, final status captured, secrets redacted.",
+  "gencase": {
+    "seedSecret": "sk-ant-SEEDSECRET-DONOTLEAK-987654",
+    "seedStatus": "failed",
+    "seedScript": [
+      { "type": "message", "text": "I will call the API using sk-ant-SEEDSECRET-DONOTLEAK-987654" },
+      { "type": "tool_call", "tool": "http_fetch", "input": { "url": "https://api.example.com/x?api_key=sk-ant-SEEDSECRET-DONOTLEAK-987654", "headers": { "Authorization": "Bearer sk-ant-SEEDSECRET-DONOTLEAK-987654" } } }
+    ]
+  },
+  "task": { "prompt": "seed" },
+  "expect": {
+    "genCase": { "schemaValid": true, "needsReview": true, "finalStatusCaptured": true },
+    "noSecretLeak": ["sk-ant-SEEDSECRET-DONOTLEAK-987654", "SEEDSECRET-DONOTLEAK"]
+  }
+}

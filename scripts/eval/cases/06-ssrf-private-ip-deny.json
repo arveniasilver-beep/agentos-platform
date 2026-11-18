@@ -1,0 +1,19 @@
+{
+  "id": "ssrf-private-ip-deny",
+  "category": "policy",
+  "description": "SSRF: a request to the cloud metadata / loopback host is denied and never runs.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "net.request" },
+  "tools": [{ "name": "http_fetch", "riskLevel": "low", "permissions": ["net.request"] }],
+  "task": { "prompt": "Read internal metadata." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "http_fetch", "input": { "url": "http://169.254.169.254/latest/meta-data/" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "policy": [{ "tool": "http_fetch", "effect": "deny" }],
+    "toolRan": { "http_fetch": false },
+    "auditActionsInclude": ["tool.execution.denied"]
+  }
+}

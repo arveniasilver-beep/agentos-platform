@@ -1,0 +1,8 @@
+{
+  "cost-probe": {
+    "inputTokens": 653,
+    "outputTokens": 12,
+    "toolCalls": 1,
+    "costUsd": 0.003565
+  }
+}

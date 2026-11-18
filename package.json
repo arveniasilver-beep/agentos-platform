@@ -1,0 +1,36 @@
+{
+  "name": "agentos-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AgentOS — production-grade AI agent operating platform (monorepo root)",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "dev": "turbo run dev",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml}\"",
+    "brand:apply": "node tooling/scripts/apply-brand.mjs",
+    "scan:secrets": "node tooling/scripts/scan-secrets.mjs",
+    "eval": "node scripts/eval/run-eval.cjs",
+    "ci": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build && pnpm run scan:secrets",
+    "package:desktop": "pnpm --filter @agentos/web build && pnpm --filter @agentos/desktop dist"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.13.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^3.0.5"
+  }
+}

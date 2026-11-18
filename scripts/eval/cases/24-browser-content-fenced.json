@@ -1,0 +1,9 @@
+{
+  "id": "browser-web-content-prompt-injection-fenced",
+  "category": "browser",
+  "kind": "browser",
+  "description": "Browser Operator: untrusted web page content carrying a prompt-injection (fence-break + 'ignore instructions' + a secret) is fenced as DATA, the fence-break is neutralized, and the secret is redacted before it re-enters the model.",
+  "env": { "BROWSER_OPERATOR_ENABLED": "true" },
+  "browser": { "scenario": "content-fenced" },
+  "expect": {}
+}

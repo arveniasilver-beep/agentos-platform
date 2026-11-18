@@ -1,0 +1,9 @@
+{
+  "id": "mobile-snapshot-consistency",
+  "category": "device",
+  "kind": "device",
+  "description": "Mobile Control Panel: a task + pending approval created server-side appear in the mobile sync snapshot by id (desktop/web/mobile consistency) without leaking the task prompt body.",
+  "env": { "DEVICE_SYNC_ENABLED": "true", "NEXT_PUBLIC_MOBILE_CONTROL_PANEL_ENABLED": "true" },
+  "device": { "scenario": "snapshot-consistency" },
+  "expect": {}
+}

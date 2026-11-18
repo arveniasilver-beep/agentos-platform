@@ -1,0 +1,9 @@
+{
+  "id": "desktop-local-action-audit-safe",
+  "category": "desktop",
+  "kind": "desktop",
+  "description": "Desktop Runner: a local file action's audit attributes the device + runner and carries the relative path + path hash, but never the full absolute host path, file content, or secrets.",
+  "env": { "DESKTOP_RUNNER_ENABLED": "true" },
+  "desktop": { "scenario": "local-audit-safe" },
+  "expect": {}
+}

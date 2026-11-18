@@ -1,0 +1,14 @@
+{
+  "id": "safe-artifact-generation",
+  "category": "tool-use",
+  "description": "A safe deliverable tool (generate_document) runs to completion.",
+  "toolset": "deliverable",
+  "approvals": { "autoDecision": "approve" },
+  "task": { "prompt": "Write a short report." },
+  "script": [
+    { "text": "I will write the report.", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "generate_document", "input": { "title": "Report", "sections": [{ "heading": "Summary", "paragraphs": ["All systems nominal."] }] } }], "stopReason": "tool_use" },
+    { "text": "Report written.", "stopReason": "end_turn" }
+  ],
+  "expect": { "status": "completed", "toolsCalled": ["generate_document"], "toolRan": { "generate_document": true } }
+}

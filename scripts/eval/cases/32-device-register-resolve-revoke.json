@@ -1,0 +1,9 @@
+{
+  "id": "device-register-resolve-revoke",
+  "category": "device",
+  "kind": "device",
+  "description": "Device Sync: registering a device returns a prefixed Bearer token that resolves to the owning user; revoking it stops resolution immediately (fail-closed).",
+  "env": { "DEVICE_SYNC_ENABLED": "true" },
+  "device": { "scenario": "register-resolve-revoke" },
+  "expect": {}
+}

@@ -1,0 +1,23 @@
+{
+  "id": "destructive-shell-deny-elevated",
+  "category": "policy",
+  "description": "Catastrophic shell command is denied; a destructive one requires elevated approval; neither runs unapproved.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "shell.exec" },
+  "tools": [{ "name": "shell_exec", "riskLevel": "low", "permissions": ["shell.exec"] }],
+  "approvals": { "autoDecision": "deny" },
+  "task": { "prompt": "Clean things up." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "shell_exec", "input": { "command": "rm -rf /" } }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "shell_exec", "input": { "command": "rm -rf build" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "policy": [
+      { "tool": "shell_exec", "effect": "deny" },
+      { "tool": "shell_exec", "effect": "require_elevated_approval" }
+    ],
+    "toolRan": { "shell_exec": false }
+  }
+}

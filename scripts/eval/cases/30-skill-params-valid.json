@@ -1,0 +1,9 @@
+{
+  "id": "skill-typed-params-valid-renders",
+  "category": "skill",
+  "kind": "skill",
+  "description": "Skills v2: valid typed params pass validation and the instructions render with {{name}} substitution.",
+  "env": { "SKILLS_PLAYBOOKS_V2_ENABLED": "true" },
+  "skill": { "scenario": "params-valid" },
+  "expect": {}
+}

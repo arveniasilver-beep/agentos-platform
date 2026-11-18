@@ -1,0 +1,8 @@
+{
+  "id": "simple-answer-no-tool",
+  "category": "tool-use",
+  "description": "Model answers directly with no tool use; run completes cleanly.",
+  "task": { "prompt": "What is 2 + 2?" },
+  "script": [{ "text": "The answer is 4.", "stopReason": "end_turn" }],
+  "expect": { "status": "completed", "toolCallCount": 0 }
+}

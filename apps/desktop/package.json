@@ -1,0 +1,29 @@
+{
+  "name": "@agentos/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AgentOS desktop shell (hardened Electron) — hosts the web static export over app://.",
+  "author": "AgentOS",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "esbuild src/main.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=dist --sourcemap",
+    "dev": "pnpm run build --watch",
+    "start": "electron dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "icon": "node scripts/make-icon.mjs",
+    "pack": "pnpm run icon && pnpm run build && electron-builder --dir --config electron-builder.config.cjs",
+    "dist": "pnpm run icon && pnpm run build && electron-builder --win nsis --config electron-builder.config.cjs"
+  },
+  "dependencies": {
+    "@agentos/brand": "workspace:*",
+    "@agentos/protocol": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "deny-loop-controlled-stop",
+  "category": "policy",
+  "description": "A model that keeps requesting a forbidden tool is stopped (task failed) after POLICY_MAX_DENIALS.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "fs.read", "POLICY_MAX_DENIALS": "2" },
+  "tools": [{ "name": "net_tool", "riskLevel": "low", "permissions": ["net.request"] }],
+  "task": { "prompt": "Keep trying to fetch." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "net_tool", "input": { "url": "https://x" } }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "net_tool", "input": { "url": "https://x" } }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "net_tool", "input": { "url": "https://x" } }], "stopReason": "tool_use" },
+    { "toolCalls": [{ "name": "net_tool", "input": { "url": "https://x" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "failed",
+    "toolRan": { "net_tool": false }
+  }
+}

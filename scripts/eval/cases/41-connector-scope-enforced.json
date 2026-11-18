@@ -1,0 +1,9 @@
+{
+  "id": "connector-capability-scope-enforced",
+  "category": "connector",
+  "kind": "connector",
+  "description": "Connectors v2: a connector action runs only if the connection granted its required scopes — a granted scope is allowed, a missing scope or unknown action is denied.",
+  "env": { "CONNECTORS_V2_ENABLED": "true" },
+  "connector": { "scenario": "scope-enforced" },
+  "expect": {}
+}

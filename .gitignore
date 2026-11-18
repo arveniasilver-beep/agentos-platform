@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build outputs
+dist/
+out/
+.next/
+build/
+release/
+*.tsbuildinfo
+*.generated.*
+
+# turborepo
+.turbo/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# rust (sidecar, later phases)
+target/
+
+# research artifacts (extracted Manus app ~100MB — reference only, not part of the repo)
+_research/
+
+# claude code machine-local settings (not shared)
+.claude/settings.local.json
+
+# logs / coverage / os
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+
+# eval harness outputs (TICKET-EVAL) — reports + generated drafts are ephemeral, never committed.
+# Only the cases, schema, baseline and README under scripts/eval/ are version-controlled.
+eval-reports/
+scripts/eval/cases/generated/
+
+# Local session handoff notes (contain personal notes about the owner); kept out of the public repo.
+docs/HANDOFF.md

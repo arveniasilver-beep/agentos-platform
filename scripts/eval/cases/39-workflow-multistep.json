@@ -1,0 +1,9 @@
+{
+  "id": "workflow-multistep-completes",
+  "category": "workflow",
+  "kind": "workflow",
+  "description": "Workflow Builder: a multi-step workflow (task -> condition -> task -> end) drives through the condition branch and reaches completed.",
+  "env": { "WORKFLOW_BUILDER_ENABLED": "true" },
+  "workflow": { "scenario": "multistep" },
+  "expect": {}
+}

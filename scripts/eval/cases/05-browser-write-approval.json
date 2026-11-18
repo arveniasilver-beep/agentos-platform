@@ -1,0 +1,21 @@
+{
+  "id": "browser-write-approval",
+  "category": "policy",
+  "description": "Browser write action requires approval; the approval payload carries browserAction, url and riskReason.",
+  "env": { "POLICY_ENGINE_ENABLED": "true", "POLICY_GRANTED_SCOPES": "browser.control" },
+  "tools": [{ "name": "browser_type", "riskLevel": "low", "permissions": ["browser.control"] }],
+  "approvals": { "autoDecision": "deny" },
+  "task": { "prompt": "Fill the login form." },
+  "script": [
+    { "text": "plan", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "browser_type", "input": { "selector": "#email", "text": "user@example.com", "url": "https://site.example.com/login" } }], "stopReason": "tool_use" },
+    { "text": "done", "stopReason": "end_turn" }
+  ],
+  "expect": {
+    "status": "completed",
+    "policy": [{ "tool": "browser_type", "effect": "require_approval" }],
+    "auditActionsInclude": ["tool.execution.approval_requested"],
+    "approvalDetail": { "hasFields": ["browserAction", "url", "riskReason"] },
+    "toolRan": { "browser_type": false }
+  }
+}

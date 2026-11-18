@@ -1,0 +1,9 @@
+{
+  "id": "memory-injection-safety",
+  "category": "memory",
+  "kind": "memory",
+  "description": "Project Memory safety: a memory carrying a secret + a prompt-injection (fence-break + 'ignore instructions') is stored REDACTED, injected with the secret absent, the delimiter break neutralized, and framed as DATA (never obey).",
+  "env": { "PROJECT_MEMORY_ENABLED": "true" },
+  "memory": { "scenario": "injection-safety" },
+  "expect": {}
+}

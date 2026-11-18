@@ -1,0 +1,37 @@
+{
+  "name": "@agentos/tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runtime tool registry + real MVP tools (scoped filesystem, HTTP fetch) for the agent engine.",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@agentos/agent-engine": "workspace:*",
+    "@agentos/tool-abi": "workspace:*",
+    "dockerode": "^4.0.2",
+    "playwright": "^1.49.1",
+    "undici": "^6.21.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@agentos/llm": "workspace:*",
+    "@agentos/protocol": "workspace:*",
+    "@types/dockerode": "^3.3.31"
+  }
+}

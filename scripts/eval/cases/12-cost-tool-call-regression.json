@@ -1,0 +1,13 @@
+{
+  "id": "cost-tool-call-regression",
+  "category": "cost",
+  "description": "Deterministic run: input/output tokens, USD and tool-call count stay within tolerance of the recorded baseline.",
+  "tools": [{ "name": "quick", "riskLevel": "low", "permissions": [] }],
+  "task": { "prompt": "Deterministic cost probe." },
+  "script": [
+    { "text": "plan step", "stopReason": "end_turn" },
+    { "toolCalls": [{ "name": "quick", "input": {} }], "stopReason": "tool_use" },
+    { "text": "final answer for the cost probe", "stopReason": "end_turn" }
+  ],
+  "expect": { "status": "completed", "cost": { "baselineKey": "cost-probe", "tolerancePct": 10 } }
+}

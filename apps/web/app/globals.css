@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme palette. The slate scale is driven by these variables (see tailwind.config.ts).
+ *  - :root (light, the default, Manus-like) INVERTS the scale — slate-950 is the white page bg and
+ *    slate-100 is near-black text — so the dark-written components render light with no edits.
+ *  - .dark restores the normal Tailwind slate values for the original dark theme.
+ * Values are space-separated RGB channels so Tailwind's `/ <alpha-value>` opacity modifiers work.
+ */
+:root {
+  --slate-950: 255 255 255; /* page background (white) */
+  --slate-900: 248 250 252; /* raised surfaces / cards */
+  --slate-800: 226 232 240; /* borders */
+  --slate-700: 203 213 225; /* input borders */
+  --slate-600: 148 163 184; /* faint */
+  --slate-500: 100 116 139; /* muted text */
+  --slate-400: 71 85 105; /* secondary text */
+  --slate-300: 51 65 85;
+  --slate-200: 30 41 59;
+  --slate-100: 15 23 42; /* primary text (near-black) */
+  --slate-50: 2 6 23; /* strongest */
+  color-scheme: light;
+}
+
+.dark {
+  --slate-50: 248 250 252;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --slate-700: 51 65 85;
+  --slate-800: 30 41 59;
+  --slate-900: 15 23 42;
+  --slate-950: 2 6 23;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: rgb(var(--slate-950));
+  color: rgb(var(--slate-100));
+}

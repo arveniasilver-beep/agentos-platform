@@ -1,0 +1,9 @@
+{
+  "id": "skill-typed-params-missing-required-rejected",
+  "category": "skill",
+  "kind": "skill",
+  "description": "Skills v2: a missing required typed param is rejected with a controlled validation error (no task dispatched).",
+  "env": { "SKILLS_PLAYBOOKS_V2_ENABLED": "true" },
+  "skill": { "scenario": "params-invalid" },
+  "expect": {}
+}
